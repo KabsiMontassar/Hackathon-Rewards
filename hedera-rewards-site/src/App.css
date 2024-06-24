@@ -1,0 +1,22 @@
+/* src/App.css */
+.App {
+  text-align: center;
+}
+
+.App-header {
+  background-color: #282c34;
+  padding: 20px;
+  color: white;
+}
+
+form {
+  margin: 20px 0;
+}
+
+input {
+  margin: 5px;
+}
+
+button {
+  margin: 5px;
+}
