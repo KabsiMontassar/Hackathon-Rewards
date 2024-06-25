@@ -4,6 +4,8 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 
 
+
+
 const firebaseConfig = {
     apiKey: "AIzaSyDqXgDnRa1YIvi05UeKNEol8Lk97ZvjxiU",
     authDomain: "hackathon-b1e7a.firebaseapp.com",
@@ -12,9 +14,10 @@ const firebaseConfig = {
     storageBucket: "hackathon-b1e7a.appspot.com",
     messagingSenderId: "512659135482",
     appId: "1:512659135482:web:9042b67dc3367bb51ae243"
+   
 };
 
 const app = initializeApp(firebaseConfig);
-
-export const auth = getAuth(app);
-export const firestore = getFirestore(app);
+const auth = getAuth(app);
+const firestore = getFirestore(app);
+export { auth, firestore };

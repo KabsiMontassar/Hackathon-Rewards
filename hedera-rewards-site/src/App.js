@@ -1,33 +1,49 @@
-import React from 'react';
-import { Route, Routes } from 'react-router-dom';
-import SignUp from './Components/SignUp';
+import React, { useState } from 'react';
+import { BrowserRouter as Router, Route  , Routes} from 'react-router-dom'; // eslint-disable-line
+import { auth } from './firebase';
+import Sidebar from './Components/Sidebar';
 import SignIn from './Components/SignIn';
+import SignUp from './Components/SignUp';
 import SignOut from './Components/SignOut';
 import Balance from './Components/Balance';
-import Redeem from './Components/Redeem';
-import PrivateRoute from './Components/PrivateRoute';
-import Home from './Components/Home';
-import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth } from './firebase';
-import './App.css';
+import ProductList from './Components/ProductList';
+import TransactionHistory from './Components/TransactionHistory';
+import Dashboard from './Components/Dashboard';
+import './firebase'; // Make sure firebase.js is imported at the beginning of your application
+
 
 function App() {
-  const [user] = useAuthState(auth);
+  const [user, setUser] = useState(null);
+
+  auth.onAuthStateChanged((currentUser) => {
+    setUser(currentUser);
+  });
 
   return (
-    <div className="App">
-      <header className="App-header">
-        <h1>Hedera Rewards System</h1>
-        {user && <SignOut />}
-      </header>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="/balance" element={<PrivateRoute><Balance /></PrivateRoute>} />
-        <Route path="/redeem" element={<PrivateRoute><Redeem /></PrivateRoute>} />
-      </Routes>
-    </div>
+   
+      <div className="App">
+        {user && <h1>Welcome, {user.email}</h1>}
+        <Sidebar />
+        <div className="content">
+       <Routes>
+           
+           <Route exact path="/balance" element={<Balance/>} />
+           <Route exact path="/products" element={<ProductList/>} />
+           <Route exact path="/transactions" element={<TransactionHistory/>} />
+         <Route exact path="/dashboard" element={<Dashboard/>} />
+      
+         <Route exact path="/signout" element={<SignOut/>} />
+     
+          <Route exact path="/signin" element={<SignIn/>} />
+          <Route exact path="/signup" element={<SignUp/>} />
+       
+
+</Routes>
+          
+           
+        </div>
+      </div>
+  
   );
 }
 

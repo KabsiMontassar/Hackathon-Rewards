@@ -1,29 +1,31 @@
-// src/components/Balance.js
 import React, { useEffect, useState } from 'react';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, firestore } from '../firebase';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { auth } from '../firebase';
 
 function Balance() {
   const [balance, setBalance] = useState(null);
   const user = auth.currentUser;
 
   useEffect(() => {
-    if (user) {
-      const fetchBalance = async () => {
-        const userDoc = doc(firestore, 'users', user.uid);
-        const docSnapshot = await getDoc(userDoc);
-        if (docSnapshot.exists()) {
-          setBalance(docSnapshot.data().balance);
+    const fetchBalance = async () => {
+      if (user) {
+        const db = getFirestore();
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+        const userData = userDocSnap.data();
+        if (userData) {
+          setBalance(userData.balance);
         }
-      };
-      fetchBalance();
-    }
+      }
+    };
+
+    fetchBalance();
   }, [user]);
 
   return (
     <div>
       <h2>Your Balance</h2>
-      <p>{balance !== null ? `${balance} tokens` : "Loading..."}</p>
+      <p>{balance !== null ? `${balance} tokens` : 'Loading...'}</p>
     </div>
   );
 }
