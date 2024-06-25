@@ -91,11 +91,11 @@ const App = () => {
 
   const fetchProducts = async () => {
     try {
-      const productsRef = await db.collection('products').get();
+      const productsRef = await db.collection('Products').get();
       const productsData = productsRef.docs.map((doc) => doc.data());
       setProducts(productsData);
     } catch (error) {
-      console.error('Error fetching products:', error);
+      console.error('Error fetching Products:', error);
     }
   };
 
