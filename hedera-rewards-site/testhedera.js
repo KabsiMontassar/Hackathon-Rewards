@@ -1,9 +1,10 @@
-// testHedera.js
-import { createToken, createAccount } from './src/Services/hedera';
+// testhedera.js
+import { createToken, createAccount } from './src/hedera.js';
 
 (async () => {
   try {
     // Test creating a Hedera account
+  
     const { accountId, privateKey } = await createAccount();
     console.log(`New account ID: ${accountId}, Private key: ${privateKey.toString()}`);
 

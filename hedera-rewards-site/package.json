@@ -1,6 +1,7 @@
 {
   "name": "hedera-rewards-site",
   "version": "0.1.0",
+  "type" : "module",
   "private": true,
   "dependencies": {
     "@hashgraph/sdk": "^2.47.0",

@@ -3,8 +3,8 @@ import { Client, TokenCreateTransaction, AccountCreateTransaction, Hbar, Private
 
 // Initialize Hedera client
 const client = Client.forTestnet();
-const operatorPrivateKey = PrivateKey.fromString(process.env.REACT_APP_OPERATOR_PRIVATE_KEY);
-const operatorAccountId = process.env.REACT_APP_OPERATOR_ACCOUNT_ID;
+const operatorPrivateKey = PrivateKey.fromString("0xc95c1f44c4b751a676a995fb6f88f041c5dabb3539628052324359ae021b636f");
+const operatorAccountId = "0.0.4471336";
 
 client.setOperator(operatorAccountId, operatorPrivateKey);
 
