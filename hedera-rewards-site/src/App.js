@@ -1,4 +1,3 @@
-// App.js
 import React, { useState, useEffect } from 'react';
 import { Client, TransferTransaction, PrivateKey, Hbar, AccountBalanceQuery } from '@hashgraph/sdk';
 import { Auth, db } from './firebase';
@@ -17,7 +16,6 @@ const App = () => {
   const [products, setProducts] = useState([]);
   const hederaAccountId= '';
   const [operatorBalance, setOperatorBalance] = useState(0);
-
 
   const fetchOperatorBalance = async () => {
     try {
@@ -57,7 +55,7 @@ const App = () => {
       const userId = Auth.currentUser.uid;
       const userData = {
         email: Auth.currentUser.email,
-        balance: 100,
+        balance: 0,
         hederaAccountId: await createHederaAccount(),
       };
       await storeUserData(userId, userData);
@@ -102,6 +100,8 @@ const App = () => {
   const signIn = async (email, password) => {
     try {
       await Auth.signInWithEmailAndPassword(email, password);
+
+      const userId = Auth.currentUser.uid;
     } catch (error) {
       console.error('Sign in error:', error);
     }
@@ -157,6 +157,27 @@ const App = () => {
     }
   };
 
+  const addHbarToOperator = async () => {
+    try {
+      const operatorAccountId = operatorPrivateKey.getAccountId().toString();
+  
+      const transferTransaction = await new TransferTransaction()
+        .addHbarTransfer(pId, new Hbar(1)) // Transfer 1 Hbar to the operator
+        .addHbarTransfer(operatorAccountId, new Hbar(-1)) // Subtract 1 Hbar from the operator
+        .setMaxTransactionFee(new Hbar(1));
+  
+      const txResponse = await transferTransaction.execute(client);
+      const receipt = await txResponse.getReceipt(client);
+      console.log(receipt.status.toString());
+  
+      // Fetch updated operator balance
+      fetchOperatorBalance();
+    } catch (error) {
+      console.error('Add Hbar to operator error:', error);
+    }
+  };
+  
+
   return (
     <div>
       {user ? (
@@ -167,6 +188,7 @@ const App = () => {
           <p>Your Hedera Account ID: {hederaAccountId}</p>
           <p>Your Token Balance: {tokenBalance} tokens</p>
           <button onClick={signOut}>Sign Out</button>
+          <button onClick={addHbarToOperator}>Add 1 Hbar to Operator</button>
           <ProductList products={products} purchaseProduct={purchaseProduct} />
         </div>
       ) : (
