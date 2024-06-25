@@ -1,66 +1,69 @@
-// App.js
 import React, { useState, useEffect } from 'react';
-import { Client, TransferTransaction, PrivateKey, Hbar, AccountBalanceQuery } from '@hashgraph/sdk';
+import { Client, PrivateKey, AccountBalanceQuery } from '@hashgraph/sdk';
 import { Auth, db } from './firebase';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { useFirestore } from './hooks/useFirestore';
+import SignInForm from './components/Auth/SignInForm';
+import SignUpForm from './components/Auth/SignUpForm';
+import ProductList from './components/Products/ProductList';
+import TransactionHistory from './components/Transactions/TransactionHistory';
+import { transferHbars } from './services/hederaService';
+import * as hederaService from './services/hederaService'; // Import all functions from hederaService
 
 const client = Client.forTestnet();
 
-const pkey = "0x8da88d05b24618d4ccd8b004fdb207776261bdf6e21ec7a1dae30c78be0e2398";
-const pId = '0.0.4474666';
+const operatorPrivateKey = PrivateKey.fromStringECDSA(process.env.REACT_APP_HEDERA_OPERATOR_PRIVATE_KEY);
+const operatorAccountId = process.env.REACT_APP_HEDERA_OPERATOR_ID;
 
-const operatorPrivateKey = PrivateKey.fromStringECDSA(pkey);
-client.setOperator(pId, operatorPrivateKey); // use fromStringECDSA 
+client.setOperator(operatorAccountId, operatorPrivateKey);
 
 const App = () => {
-  const [user, setUser] = useState(null);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [products, setProducts] = useState([]);
-  const hederaAccountId= '';
-  const [operatorBalance, setOperatorBalance] = useState(0);
-
+  const { user } = useAuth();
+  const { fetchProducts, fetchUserBalance, storeTransactionHistory } = useFirestore();
 
   const fetchOperatorBalance = async () => {
     try {
-      const operatorBalance = await new AccountBalanceQuery()
-        .setAccountId(pId)
+      const balance = await new AccountBalanceQuery()
+        .setAccountId(operatorAccountId)
         .execute(client);
-      setOperatorBalance(operatorBalance.hbars.toTinybars().toString());
+      // setOperatorBalance(balance.hbars.toTinybars().toString());
     } catch (error) {
       console.error('Error fetching operator balance:', error);
     }
   };
 
-  const fetchTokenBalance = async (userId) => {
-    try {
-      const tokenBalanceRef = await db.collection('utilisateurs').doc(userId).get();
-      const tokenBalanceData = tokenBalanceRef.data();
-      setTokenBalance(tokenBalanceData.balance);
-    } catch (error) {
-      console.error('Error fetching token balance:', error);
-    }
-  };
+
 
   useEffect(() => {
-    Auth.onAuthStateChanged((user) => {
-      setUser(user);
-      if (user) {
-        fetchTokenBalance(user.uid);
-        fetchOperatorBalance();
-        fetchProducts();
+    const fetchTokenBalance = async (userId) => {
+      try {
+        const balance = await fetchUserBalance(userId);
+        setTokenBalance(balance);
+      } catch (error) {
+        console.error('Error fetching token balance:', error);
       }
-    });
-  }, []);
+    };
+
+    if (user) {
+      fetchTokenBalance(user.uid);
+      fetchOperatorBalance();
+      fetchProducts();
+    }
+  }, [user, fetchProducts, fetchUserBalance]);
 
   const signUp = async (email, password) => {
     try {
       await Auth.createUserWithEmailAndPassword(email, password);
       const userId = Auth.currentUser.uid;
+      const hederaAccount = await createHederaAccount();
       const userData = {
         email: Auth.currentUser.email,
-        balance: 100,
-        hederaAccountId: await createHederaAccount(),
+        balance: 0,
+        hederaAccountId: hederaAccount.newAccountId,
       };
-      await storeUserData(userId, userData);
+      await db.collection('User').doc(userId).set(userData);
     } catch (error) {
       console.error('Sign up error:', error);
     }
@@ -68,34 +71,11 @@ const App = () => {
 
   const createHederaAccount = async () => {
     try {
-      // Simulate account creation on Hedera (replace with actual Hedera SDK logic)
-      const accountId = '0.0.' + Math.floor(Math.random() * 1000000);
-      console.log('Account created on Hedera:', accountId);
-      return accountId;
+      const { newAccountId } = await hederaService.createHederaAccount();
+      return newAccountId;
     } catch (error) {
       console.error('Hedera account creation error:', error);
       throw error;
-    }
-  };
-
-  const storeUserData = async (userId, userData) => {
-    try {
-      // Store user data in Firestore database
-      await db.collection('utilisateurs').doc(userId).set(userData);
-      console.log('User data stored in database:', userId, userData);
-    } catch (error) {
-      console.error('Error storing user data:', error);
-      throw error;
-    }
-  };
-
-  const fetchProducts = async () => {
-    try {
-      const productsRef = await db.collection('Products').get();
-      const productsData = productsRef.docs.map((doc) => doc.data());
-      setProducts(productsData);
-    } catch (error) {
-      console.error('Error fetching Products:', error);
     }
   };
 
@@ -121,36 +101,29 @@ const App = () => {
         console.error('Please sign in to purchase products.');
         return;
       }
-  
+
       if (tokenBalance < product.cost) {
         alert('Insufficient funds.');
         return;
       }
-  
+
       const userId = user.uid;
-      const userRef = db.collection('utilisateurs').doc(userId);
       await db.runTransaction(async (transaction) => {
-        const userDoc = await transaction.get(userRef);
+        const userDoc = await transaction.get(db.collection('User').doc(userId));
         const newBalance = userDoc.data().balance - product.cost;
-        transaction.update(userRef, { balance: newBalance });
+        transaction.update(db.collection('User').doc(userId), { balance: newBalance });
         setTokenBalance(newBalance);
 
-        const transferTransaction = await new TransferTransaction()
-          .addHbarTransfer(pId, new Hbar(-1))
-          .addHbarTransfer(userDoc.data().hederaAccountId, new Hbar(1))
-          .setMaxTransactionFee(new Hbar(1));
+        await transferHbars(operatorAccountId, userDoc.data().hederaAccountId, product.cost / 100);
 
-        const txResponse = await transferTransaction.execute(client);
-        const receipt = await txResponse.getReceipt(client);
-        console.log(receipt.status.toString());
-        
-        const accountBalance = await new AccountBalanceQuery()
-          .setAccountId(userDoc.data().hederaAccountId)
-          .execute(client);
-          
-        console.log(accountBalance.hbars.toTinybars().toString());
-        await fetchTokenBalance(userId);
-        fetchProducts();
+        const transactionDetails = {
+          productId: product.id,
+          productName: product.name,
+          cost: product.cost,
+          date: new Date(),
+          hbarsSpent: product.cost / 100,
+        };
+        await storeTransactionHistory(userId, transactionDetails);
       });
     } catch (error) {
       console.error('Purchase error:', error);
@@ -158,99 +131,26 @@ const App = () => {
   };
 
   return (
-    <div>
-      {user ? (
-        <div>
-          <h1>Hedera Rewards Platform</h1>
-          <p>Operator Balance: {operatorBalance} tokens</p>
-          <p>Welcome, {user.email}!</p>
-          <p>Your Hedera Account ID: {hederaAccountId}</p>
-          <p>Your Token Balance: {tokenBalance} tokens</p>
-          <button onClick={signOut}>Sign Out</button>
-          <ProductList products={products} purchaseProduct={purchaseProduct} />
-        </div>
-      ) : (
-        <div>
-          <p>Please sign in to access the platform.</p>
-          <SignInForm signIn={signIn} />
-          <p>Don't have an account? Sign up below:</p>
-          <SignUpForm signUp={signUp} />
-        </div>
-      )}
-    </div>
-  );
-};
-
-const SignInForm = ({ signIn }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    signIn(email, password);
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button type="submit">Sign In</button>
-    </form>
-  );
-};
-
-const SignUpForm = ({ signUp }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    signUp(email, password);
-  };
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <input
-        type="email"
-        placeholder="Email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-      />
-      <button type="submit">Sign Up</button>
-    </form>
-  );
-};
-
-const ProductList = ({ products, purchaseProduct }) => {
-  return (
-    <div>
-      <h2>Available Products</h2>
-      <ul>
-        {products.map((product, index) => (
-          <li key={index}>
-            <p>{product.name}</p>
-            <p>Cost: {product.cost} tokens</p>
-            <button onClick={() => purchaseProduct(product)}>Purchase</button>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <AuthProvider>
+      <div>
+        <h1>E-commerce App</h1>
+        {user ? (
+          <div>
+            <h2>Welcome, {user.email}</h2>
+            <p>Your balance: {tokenBalance} HBAR</p>
+         
+            <ProductList products={products} purchaseProduct={purchaseProduct} />
+            <TransactionHistory />
+            <button onClick={signOut}>Sign Out</button>
+          </div>
+        ) : (
+          <div>
+            <SignUpForm signUp={signUp} />
+            <SignInForm signIn={signIn} />
+          </div>
+        )}
+      </div>
+    </AuthProvider>
   );
 };
 
