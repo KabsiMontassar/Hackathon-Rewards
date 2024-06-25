@@ -1,18 +1,34 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import { Client, TransferTransaction  , PrivateKey, Hbar} from '@hashgraph/sdk';
+import { Client, TransferTransaction, PrivateKey, Hbar, AccountBalanceQuery } from '@hashgraph/sdk';
 import { Auth, db } from './firebase';
 
 const client = Client.forTestnet();
 
-const operatorPrivateKey = PrivateKey.fromStringECDSA('0x8da88d05b24618d4ccd8b004fdb207776261bdf6e21ec7a1dae30c78be0e2398');
-client.setOperator('0.0.4474666', operatorPrivateKey); // use fromStringECDSA 
+const pkey = "0x8da88d05b24618d4ccd8b004fdb207776261bdf6e21ec7a1dae30c78be0e2398";
+const pId = '0.0.4474666';
 
+const operatorPrivateKey = PrivateKey.fromStringECDSA(pkey);
+client.setOperator(pId, operatorPrivateKey); // use fromStringECDSA 
 
 const App = () => {
   const [user, setUser] = useState(null);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [products, setProducts] = useState([]);
+  const hederaAccountId= '';
+  const [operatorBalance, setOperatorBalance] = useState(0);
+
+
+  const fetchOperatorBalance = async () => {
+    try {
+      const operatorBalance = await new AccountBalanceQuery()
+        .setAccountId(pId)
+        .execute(client);
+      setOperatorBalance(operatorBalance.hbars.toTinybars().toString());
+    } catch (error) {
+      console.error('Error fetching operator balance:', error);
+    }
+  };
 
   const fetchTokenBalance = async (userId) => {
     try {
@@ -29,6 +45,7 @@ const App = () => {
       setUser(user);
       if (user) {
         fetchTokenBalance(user.uid);
+        fetchOperatorBalance();
         fetchProducts();
       }
     });
@@ -37,16 +54,13 @@ const App = () => {
   const signUp = async (email, password) => {
     try {
       await Auth.createUserWithEmailAndPassword(email, password);
-        const userId = Auth.currentUser.uid;
-        const userData = {
-            email: Auth.currentUser.email,
-            balance: 100,
-            hederaAccountId: await createHederaAccount(),
-        };
-        await storeUserData(userId, userData);
-
-
-        
+      const userId = Auth.currentUser.uid;
+      const userData = {
+        email: Auth.currentUser.email,
+        balance: 100,
+        hederaAccountId: await createHederaAccount(),
+      };
+      await storeUserData(userId, userData);
     } catch (error) {
       console.error('Sign up error:', error);
     }
@@ -119,28 +133,25 @@ const App = () => {
         const userDoc = await transaction.get(userRef);
         const newBalance = userDoc.data().balance - product.cost;
         transaction.update(userRef, { balance: newBalance });
-  
-        // transaction 
+        setTokenBalance(newBalance);
 
-        const transferTransaction = new TransferTransaction()
-        .addHbarTransfer('0.0.4474666', new Hbar(-1))
-        .addHbarTransfer(userDoc.data().hederaAccountId, new Hbar(1))
-        
-       const txResponse  =  await transferTransaction.execute(client);
+        const transferTransaction = await new TransferTransaction()
+          .addHbarTransfer(pId, new Hbar(-1))
+          .addHbarTransfer(userDoc.data().hederaAccountId, new Hbar(1))
+          .setMaxTransactionFee(new Hbar(1));
 
+        const txResponse = await transferTransaction.execute(client);
         const receipt = await txResponse.getReceipt(client);
-
         console.log(receipt.status.toString());
-
-  
-       
-  
-     
-  
+        
+        const accountBalance = await new AccountBalanceQuery()
+          .setAccountId(userDoc.data().hederaAccountId)
+          .execute(client);
+          
+        console.log(accountBalance.hbars.toTinybars().toString());
+        await fetchTokenBalance(userId);
+        fetchProducts();
       });
-  
-      await fetchTokenBalance(userId); // Updated to await
-      fetchProducts();
     } catch (error) {
       console.error('Purchase error:', error);
     }
@@ -150,7 +161,10 @@ const App = () => {
     <div>
       {user ? (
         <div>
+          <h1>Hedera Rewards Platform</h1>
+          <p>Operator Balance: {operatorBalance} tokens</p>
           <p>Welcome, {user.email}!</p>
+          <p>Your Hedera Account ID: {hederaAccountId}</p>
           <p>Your Token Balance: {tokenBalance} tokens</p>
           <button onClick={signOut}>Sign Out</button>
           <ProductList products={products} purchaseProduct={purchaseProduct} />
@@ -194,6 +208,7 @@ const SignInForm = ({ signIn }) => {
     </form>
   );
 };
+
 const SignUpForm = ({ signUp }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -201,7 +216,6 @@ const SignUpForm = ({ signUp }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     signUp(email, password);
-
   };
 
   return (
@@ -222,6 +236,7 @@ const SignUpForm = ({ signUp }) => {
     </form>
   );
 };
+
 const ProductList = ({ products, purchaseProduct }) => {
   return (
     <div>
@@ -231,7 +246,6 @@ const ProductList = ({ products, purchaseProduct }) => {
           <li key={index}>
             <p>{product.name}</p>
             <p>Cost: {product.cost} tokens</p>
-          
             <button onClick={() => purchaseProduct(product)}>Purchase</button>
           </li>
         ))}
